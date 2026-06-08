@@ -1,5 +1,11 @@
+from urllib import response
 import uuid
 import streamlit as st
+
+from services.llm import get_llm_response
+
+from services.stt import transcribe_audio
+from services.tts import text_to_speech
 
 st.set_page_config(
     page_title="E-Commerce Voice Bot",
@@ -9,12 +15,21 @@ st.set_page_config(
 
 
 def initialize_session_state():
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
     if "turn_count" not in st.session_state:
         st.session_state.turn_count = 0
     if "session_id" not in st.session_state:
         st.session_state.session_id = str(uuid.uuid4())[:8]
     if "conversation_status" not in st.session_state:
         st.session_state.conversation_status = "Ready for audio input."
+    if "current_transcript" not in st.session_state:
+        st.session_state.current_transcript = ""
+    if "current_response" not in st.session_state:
+        st.session_state.current_response = ""
+    if "last_audio_path" not in st.session_state:
+        st.session_state.last_audio_path = None
+        
     
         
 def reset_conversation():
@@ -32,6 +47,11 @@ def build_message_history():
         for item in st.session_state.chat_history
     ]
     
+    
+# user msg and assistant response stored in chat history
+def append_turn(role, content):
+    st.session_state.chat_history.append({"role": role, "content": content})
+
 
 def process_user_turn(user_text):
     st.session_state.current_transcript = user_text
@@ -42,13 +62,17 @@ def process_user_turn(user_text):
     response = get_llm_response(user_text, chat_history=messages)
     if not response:
         response = "Error: No response received from assistant."
-
+        
+     # after LLM generated responsee
+     
     st.session_state.current_response = response
     append_turn("user", user_text)
-    append_turn("assistant", response)
+    append_turn("assistant", response)  # adds new message to chat history with role and content
+    
     st.session_state.turn_count += 1
     st.session_state.conversation_status = "Last turn completed successfully."
-
+    
+    
     audio_path = None
     if not response.startswith("Error:"):
         audio_path = text_to_speech(response)
@@ -58,6 +82,9 @@ def process_user_turn(user_text):
             audio_path = audio_path
 
     return response, audio_path
+
+
+
 
 
 initialize_session_state()
@@ -108,3 +135,42 @@ with left_col:
         )
         if st.form_submit_button("Ask Question") and custom_question.strip():
             process_user_turn(custom_question.strip())
+            
+            
+            
+    st.markdown("---")
+    st.subheader("🎤 Audio Input")
+    uploaded_file = st.file_uploader(
+        "Upload an audio file (WAV, MP3, M4A)",
+        type=["wav", "mp3", "m4a"],
+        key="audio_upload"
+    )
+    
+    if uploaded_file:
+        st.audio(uploaded_file)
+        
+        if st.button("Process Audio", key="process_audio"):
+            with st.spinner("Transcribing and generating response..."):
+                transcript = transcribe_audio(uploaded_file)
+                if not transcript:
+                    st.error("Error: No transcript received.")
+                elif transcript.startswith("Error:"):
+                    st.error(transcript)
+                else:
+                    process_user_turn(transcript)
+                    
+with right_col:
+    st.subheader("Latest Turn")
+    
+    if st.session_state.current_transcript:
+        st.markdown("**User:**")
+        st.write(st.session_state.current_transcript)
+    
+    if st.session_state.current_response:
+        st.markdown("**Bot:**")
+        st.write(st.session_state.current_response)
+        
+    if st.session_state.last_audio_path:
+        
+        st.subheader("🔊 Latest Voice Response")
+        st.audio(st.session_state.last_audio_path)

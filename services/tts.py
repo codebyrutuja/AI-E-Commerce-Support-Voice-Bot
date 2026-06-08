@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 from sarvamai import SarvamAI
+
 import base64
 import tempfile
 
@@ -11,6 +12,8 @@ def get_sarvam_client():
     if not api_key:
         raise ValueError("SARVAM_API_KEY not found in .env")
     return SarvamAI(api_subscription_key=api_key)
+
+
 
 
 def text_to_speech(text):

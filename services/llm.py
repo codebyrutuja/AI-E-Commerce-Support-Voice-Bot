@@ -4,7 +4,7 @@ import re
 from dotenv import load_dotenv
 from sarvamai import SarvamAI
 
-from services.llm import get_llm_response
+
 
 SYSTEM_PROMPT = (       
     "You are a helpful e-commerce customer support assistant. "
@@ -127,3 +127,12 @@ def get_llm_response(user_query, chat_history=None):
         if "invalid_api_key_error" in error_text or "Invalid or missing authentication credentials" in error_text:
             return "Error: Invalid SARVAM_API_KEY. Please check your .env file and key permissions."
         return f"Error: {error_text}"
+    
+    #validation function that checks whether the AI response is a meaningful answer
+def clean_assistant_response(text):
+    if not text:
+        return ""
+    text = re.sub(r"<think>[\s\S]*?</think>", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"^[Ff]inal answer[:\s]*", "", text)
+    return text.strip()
+
