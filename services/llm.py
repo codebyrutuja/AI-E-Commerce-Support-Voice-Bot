@@ -72,3 +72,24 @@ def _looks_like_valid_answer(text):
     if len(stripped) > 250 and stripped.count('\n') > 1:
         return False
     return True
+
+
+def _extract_final_answer_from_reasoning(text):
+    if not text:
+        return None
+
+    final_answer_match = re.search(r"(?:final answer|answer|response)[:\-]\s*(.+)$", text, flags=re.IGNORECASE | re.DOTALL)
+    if final_answer_match:
+        candidate = final_answer_match.group(1).strip()
+        if candidate and _looks_like_valid_answer(candidate):
+            return candidate
+
+    paragraphs = [p.strip() for p in re.split(r"\n\n+", text) if p.strip()]
+    for paragraph in reversed(paragraphs[-3:]):
+        if _looks_like_valid_answer(paragraph):
+            return paragraph
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    for line in reversed(lines[-5:]):
+        if _looks_like_valid_answer(line):
+            return line
+    return None
