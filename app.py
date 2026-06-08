@@ -26,6 +26,38 @@ def reset_conversation():
     st.session_state.current_response = ""
     st.session_state.last_audio_path = None
 
+def build_message_history():
+    return [
+        {"role": item["role"], "content": item["content"]}
+        for item in st.session_state.chat_history
+    ]
+    
+
+def process_user_turn(user_text):
+    st.session_state.current_transcript = user_text
+    st.session_state.current_response = ""
+    st.session_state.last_audio_path = None
+
+    messages = build_message_history()
+    response = get_llm_response(user_text, chat_history=messages)
+    if not response:
+        response = "Error: No response received from assistant."
+
+    st.session_state.current_response = response
+    append_turn("user", user_text)
+    append_turn("assistant", response)
+    st.session_state.turn_count += 1
+    st.session_state.conversation_status = "Last turn completed successfully."
+
+    audio_path = None
+    if not response.startswith("Error:"):
+        audio_path = text_to_speech(response)
+        if audio_path and not audio_path.startswith("Error"):
+            st.session_state.last_audio_path = audio_path
+        else:
+            audio_path = audio_path
+
+    return response, audio_path
 
 
 initialize_session_state()
@@ -67,3 +99,12 @@ with left_col:
         for index, question in enumerate(suggested_questions):
             if st.button(question, key=f"suggest_{index}"):
                 process_user_turn(question)
+                
+    with st.form("question_form", clear_on_submit=True):
+        custom_question = st.text_input(
+            "Type a question",
+            key="custom_question",
+            placeholder="Ask about returns, shipping, orders, or payments"
+        )
+        if st.form_submit_button("Ask Question") and custom_question.strip():
+            process_user_turn(custom_question.strip())
