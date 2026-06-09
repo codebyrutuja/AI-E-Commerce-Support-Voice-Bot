@@ -118,7 +118,15 @@ def _extract_choice_text(choice):
     return None
 
 
+# added validation\
+
+
+
+
 def get_llm_response(user_query, chat_history=None):
+    
+    
+
     
     try:
         client = get_sarvam_client()
