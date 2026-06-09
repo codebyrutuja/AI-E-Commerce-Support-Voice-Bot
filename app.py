@@ -41,7 +41,7 @@ def reset_conversation():
     st.session_state.current_response = ""
     st.session_state.last_audio_path = None
 
-def build_message_history():
+def build_message_history():  
     return [
         {"role": item["role"], "content": item["content"]}
         for item in st.session_state.chat_history
@@ -104,7 +104,7 @@ with status_col:
 with control_col:
     if st.button("Start New Conversation", key="new_conversation"):
         reset_conversation()
-        st.experimental_rerun()
+        st.rerun()
         
 st.markdown("---")
 
@@ -169,8 +169,26 @@ with right_col:
     if st.session_state.current_response:
         st.markdown("**Bot:**")
         st.write(st.session_state.current_response)
-        
     if st.session_state.last_audio_path:
-        
         st.subheader("🔊 Latest Voice Response")
         st.audio(st.session_state.last_audio_path)
+        
+        
+#-----------------------------
+    
+    st.markdown("---")
+    st.subheader("Conversation History")
+    if st.session_state.chat_history:
+        for index in range(0, len(st.session_state.chat_history), 2):
+            user_item = st.session_state.chat_history[index]
+            assistant_item = st.session_state.chat_history[index + 1] if index + 1 < len(st.session_state.chat_history) else None
+            
+            if user_item["role"] == "user":
+                st.markdown(f"**{(index // 2) + 1}. 👤 User:** {user_item['content']}")
+            else:
+                st.markdown(f"**{(index // 2) + 1}. 👤 User:** {user_item['content']}")
+
+            if assistant_item and assistant_item["role"] == "assistant":
+                st.markdown(f"- 🤖 Assistant: {assistant_item['content']}")
+    else:
+        st.write("No conversation yet. Ask a question to start the chat.")

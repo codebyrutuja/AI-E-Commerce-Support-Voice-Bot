@@ -45,3 +45,7 @@ def text_to_speech(text):
         if "invalid_api_key_error" in error_text or "Invalid or missing authentication credentials" in error_text:
             return "Error: Invalid SARVAM_API_KEY. Please check your .env file and key permissions."
         return f"Error: {error_text}"
+
+
+#this function and file is used for after receving voice msg from user then we will call this function to convert voice msg into text and 
+#then we will send that text to llm for getting response and then we will send that response to tts for converting that response into voice and then we will play that voice response to user.

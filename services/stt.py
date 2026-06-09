@@ -26,7 +26,7 @@ def transcribe_audio(uploaded_file):
         except Exception:
             pass
 
-        with temp_file.NamedTemporaryFile(delete=False, suffix=file_ext) as temp_file:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as temp_file:
             temp_file.write(uploaded_file.read())
             temp_file_path = temp_file.name
 
@@ -62,3 +62,7 @@ def transcribe_audio(uploaded_file):
                 os.remove(temp_file_path)
             except Exception:
                 pass
+            
+            
+# this file is use for after receving voice msg from user then we will call this function to convert voice msg into text and 
+# then we will send that text to llm for getting response and then we will send that response to tts for converting that response into voice and then we will play that voice response to user.
