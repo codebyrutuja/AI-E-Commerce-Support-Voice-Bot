@@ -30,6 +30,11 @@ def initialize_session_state():
     if "last_audio_path" not in st.session_state:
         st.session_state.last_audio_path = None
         
+    if "current_cost" not in st.session_state:
+        st.session_state.current_cost = 0.0
+    if "current_tokens" not in st.session_state:
+        st.session_state.current_tokens = 0
+        
     
         
 def reset_conversation():
@@ -49,8 +54,18 @@ def build_message_history():
     
     
 # user msg and assistant response stored in chat history
-def append_turn(role, content):
-    st.session_state.chat_history.append({"role": role, "content": content})
+def append_turn(
+    role,
+    content,
+    cost=None,
+    tokens=None
+    ):
+    st.session_state.chat_history.append({
+        "role": role,
+        "content": content,
+        "cost": cost,
+        "tokens": tokens
+    })
 
 
 def process_user_turn(user_text):
@@ -61,27 +76,48 @@ def process_user_turn(user_text):
     messages = build_message_history()
     response = get_llm_response(user_text, chat_history=messages)
     if not response:
-        response = "Error: No response received from assistant."
+        response = {
+        "message": "Error: No response received from assistant.",
+        "cost": 0,
+        "total_tokens": 0
+    }
+    
         
-     # after LLM generated responsee
+    
      
-    st.session_state.current_response = response
-    append_turn("user", user_text)
-    append_turn("assistant", response)  # adds new message to chat history with role and content
+    st.session_state.current_response = response["message"]
+    
+    st.session_state.current_cost = response["cost"]
+    st.session_state.current_tokens = response["total_tokens"]
+    
+    
+     # after LLM generated responsee
+    
+    append_turn(
+    "user",
+    user_text
+    )
+
+    append_turn(
+    "assistant",
+    response["message"],
+    cost=response["cost"],
+    tokens=response["total_tokens"]
+    )# adds new message to chat history with role and content
     
     st.session_state.turn_count += 1
     st.session_state.conversation_status = "Last turn completed successfully."
     
     
     audio_path = None
-    if not response.startswith("Error:"):
-        audio_path = text_to_speech(response)
+    if not response["message"].startswith("Error:"):
+        audio_path = text_to_speech(response["message"])
         if audio_path and not audio_path.startswith("Error"):
             st.session_state.last_audio_path = audio_path
-        else:
-            audio_path = audio_path
+    else:
+        audio_path = audio_path
 
-    return response, audio_path
+    return response['message'], audio_path
 
 
 
@@ -169,11 +205,19 @@ with right_col:
     if st.session_state.current_response:
         st.markdown("**Bot:**")
         st.write(st.session_state.current_response)
+        
+    st.caption(
+        f"Tokens: {st.session_state.current_tokens} | "
+        f"Cost: ₹{st.session_state.current_cost:.6f}"
+    )
     if st.session_state.last_audio_path:
         st.subheader("🔊 Latest Voice Response")
         st.audio(st.session_state.last_audio_path)
         
-        
+    
+    
+
+    
 #-----------------------------
     
     st.markdown("---")
@@ -190,5 +234,11 @@ with right_col:
 
             if assistant_item and assistant_item["role"] == "assistant":
                 st.markdown(f"- 🤖 Assistant: {assistant_item['content']}")
+
+            if assistant_item.get("tokens") is not None:
+                st.caption(
+                    f"Tokens: {assistant_item['tokens']} | "
+                    f"Cost: ₹{assistant_item['cost']:.6f}"
+                )
     else:
         st.write("No conversation yet. Ask a question to start the chat.")

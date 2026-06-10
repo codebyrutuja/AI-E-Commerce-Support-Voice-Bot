@@ -37,7 +37,7 @@ STORE POLICIES:
 RULES:
 
 1. Be friendly, professional, and concise.
-2. Keep responses under 3 sentences unless more detail is requested.
+2. Keep responses under 4 sentences unless more detail is requested.
 3. If the customer is upset, acknowledge their frustration before helping.
 4. If information is unavailable, say: "I don't have access to that information right now."
 5. Never invent order details, tracking updates, refund status, or product availability.
@@ -52,6 +52,7 @@ However, do not invent any new information about the order.
 For non-shopping questions respond exactly:
 If a user asks unrelated questions such as:
 "I can only help with shopping-related questions, orders, products, payments, shipping, returns, and refunds."
+International shipping: Yes, we ship to select international destinations. International delivery typically takes 7-14 business days, and shipping charges may vary depending on the destination.
 
 Always prioritize accuracy and customer satisfaction.
 """
@@ -156,15 +157,31 @@ def _extract_choice_text(choice):
     return None
 
 
-# added validation\
+# add cost usage
+MODEL_PRICING = {
+    "sarvam-105b": {
+        "input_price": 4,
+        "output_price": 16
+    }
+}
 
+def calculate_cost(model_name, prompt_tokens, completion_tokens):
+    pricing = MODEL_PRICING[model_name]
 
+    input_cost = (
+        prompt_tokens / 1_000_000
+    ) * pricing["input_price"]
+
+    output_cost = (
+        completion_tokens / 1_000_000
+    ) * pricing["output_price"]
+
+    total_cost = input_cost + output_cost
+
+    return round(total_cost, 6)
 
 
 def get_llm_response(user_query, chat_history=None):
-    
-    
-
     
     try:
         client = get_sarvam_client()
@@ -182,12 +199,36 @@ def get_llm_response(user_query, chat_history=None):
             reasoning_effort="low",
             max_tokens=1200,
         )
+        print("\n========== SARVAM RESPONSE ==========")
+        print(response)
 
-        if hasattr(response, "choices") and response.choices:
-            content = _extract_choice_text(response.choices[0])
+
+        usage = getattr(response, "usage", None)
+
+        print("\n========== USAGE ==========")
+        print(usage)
+        
+        cost =0 
+        
+        if usage:
+            cost = calculate_cost(
+            MODEL_NAME,
+            usage.prompt_tokens,
+            usage.completion_tokens
+        )
+            if hasattr(response, "choices") and response.choices:
+                content = _extract_choice_text(response.choices[0])
             if content:
-                return clean_assistant_response(content)
-            return "Error: LLM returned empty response. Please try again."
+                return {
+                    "message": clean_assistant_response(content),
+                    "cost": cost,
+                    "total_tokens": usage.total_tokens
+               }
+            return {
+                "message": "Error: LLM returned empty response. Please try again.",
+                "cost": 0,
+                "total_tokens": 0
+}
 
         return "Error: No assistant response returned from Sarvam."
     except Exception as e:
