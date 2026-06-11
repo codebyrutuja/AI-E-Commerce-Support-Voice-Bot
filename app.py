@@ -2,7 +2,7 @@ from urllib import response
 import uuid
 import streamlit as st
 
-from services.llm import get_llm_response
+from services.llm_providers.manager import get_llm_response
 
 from services.stt import transcribe_audio
 from services.tts import text_to_speech
@@ -35,7 +35,21 @@ def initialize_session_state():
     if "current_tokens" not in st.session_state:
         st.session_state.current_tokens = 0
         
-    
+    if "selected_model" not in st.session_state:
+        st.session_state.selected_model = "sarvam"
+        
+    if "chat_sessions" not in st.session_state:
+        st.session_state.chat_sessions = {}
+        
+    if "current_chat_id" not in st.session_state:
+        st.session_state.current_chat_id = str(uuid.uuid4())[:8]
+        
+
+    if "previous_model" not in st.session_state:
+        st.session_state.previous_model = "sarvam"
+   
+        
+        
         
 def reset_conversation():
     st.session_state.chat_history = []
@@ -46,6 +60,28 @@ def reset_conversation():
     st.session_state.current_response = ""
     st.session_state.last_audio_path = None
 
+
+def create_new_chat_session(model_name):
+
+    st.session_state.chat_history = []
+
+    st.session_state.turn_count = 0
+
+    st.session_state.session_id = str(uuid.uuid4())[:8]
+
+    st.session_state.current_transcript = ""
+
+    st.session_state.current_response = ""
+    
+    st.session_state.last_audio_path = None
+
+    st.session_state.selected_model = model_name
+
+    st.session_state.conversation_status = (
+        f"New chat session started with {model_name}"
+    )
+    
+     
 def build_message_history():  
     return [
         {"role": item["role"], "content": item["content"]}
@@ -60,36 +96,57 @@ def append_turn(
     cost=None,
     tokens=None
     ):
-    st.session_state.chat_history.append({
+    message = {
         "role": role,
         "content": content,
         "cost": cost,
-        "tokens": tokens
-    })
+        "tokens": tokens,
+        "model": st.session_state.selected_model
+    }
+    
+    # Current chat history (what you already have)
+    st.session_state.chat_history.append(message)
+
+    # Save to session-specific history
+    current_chat_id = st.session_state.current_chat_id
+
+    if current_chat_id not in st.session_state.chat_sessions:
+        st.session_state.chat_sessions[current_chat_id] = []
+
+    st.session_state.chat_sessions[current_chat_id].append(message)
+    
+    #print("History Length:", len(st.session_state.chat_history))
+    
+    
 
 
 def process_user_turn(user_text):
     st.session_state.current_transcript = user_text
     st.session_state.current_response = ""
     st.session_state.last_audio_path = None
-
+    
+    
     messages = build_message_history()
-    response = get_llm_response(user_text, chat_history=messages)
+    response = get_llm_response(user_text, chat_history=messages, providers=st.session_state.selected_model)
     if not response:
         response = {
         "message": "Error: No response received from assistant.",
         "cost": 0,
         "total_tokens": 0
     }
-    
-        
+    if isinstance(response, str):
+        response = {
+            "message": response,
+            "cost": 0,
+            "total_tokens": 0
+        }
     
      
     st.session_state.current_response = response["message"]
     
     st.session_state.current_cost = response["cost"]
     st.session_state.current_tokens = response["total_tokens"]
-    
+    #st.write("Current Model:", st.session_state.selected_model)
     
      # after LLM generated responsee
     
@@ -120,7 +177,21 @@ def process_user_turn(user_text):
     return response['message'], audio_path
 
 
+# it is used to create new chat after each session created
 
+def create_chat_session(model):
+    chat_id = str(uuid.uuid4())[:8]
+
+    st.session_state.current_chat_id = chat_id
+
+    st.session_state.chat_sessions[chat_id] = {
+        "model": model,
+        "messages": []
+    }
+
+    st.session_state.chat_history = []
+
+    return chat_id
 
 
 initialize_session_state()
@@ -134,12 +205,16 @@ with status_col:
     st.markdown("### Conversation Status")
     st.info(st.session_state.conversation_status)
     st.write(f"**Session ID:** {st.session_state.session_id}")
-    st.write(f"**Turns:** {st.session_state.turn_count}")
+    #st.write(f"**Turn Count:** {st.session_state.turn_count}")
     
     
 with control_col:
     if st.button("Start New Conversation", key="new_conversation"):
         reset_conversation()
+        
+        st.session_state.previous_model = (
+            st.session_state.selected_model
+        )
         st.rerun()
         
 st.markdown("---")
@@ -149,6 +224,8 @@ left_col, right_col = st.columns([3, 1])
 with left_col:
     st.subheader("🛒 Ecommerce Voice Chat")
     st.write("Ask ecommerce questions, and the bot will reply with text and voice.")
+    
+    
     suggested_questions = [
         "What is your return policy?",
         "How long does shipping take?",
@@ -169,6 +246,22 @@ with left_col:
             key="custom_question",
             placeholder="Ask about returns, shipping, orders, or payments"
         )
+        selected_model = st.selectbox(
+            "🤖 Select AI Model",
+            [  "sarvam",
+                "gemini",
+                "huggingface"
+            ]
+        )
+        if selected_model != st.session_state.previous_model:
+            create_new_chat_session(selected_model)
+            st.session_state.previous_model = selected_model
+            st.rerun()
+        
+            
+        st.session_state.selected_model = selected_model
+        
+        st.write("Current Model:", st.session_state.selected_model)
         if st.form_submit_button("Ask Question") and custom_question.strip():
             process_user_turn(custom_question.strip())
             
@@ -214,10 +307,8 @@ with right_col:
         st.subheader("🔊 Latest Voice Response")
         st.audio(st.session_state.last_audio_path)
         
-    
-    
 
-    
+#conversaion history
 #-----------------------------
     
     st.markdown("---")
@@ -231,11 +322,15 @@ with right_col:
                 st.markdown(f"**{(index // 2) + 1}. 👤 User:** {user_item['content']}")
             else:
                 st.markdown(f"**{(index // 2) + 1}. 👤 User:** {user_item['content']}")
-
+# added here chat history for each model used
             if assistant_item and assistant_item["role"] == "assistant":
+                model_used = assistant_item.get("model", "Unknown")
+
+                st.caption(f"Model Used: {model_used}")
+
                 st.markdown(f"- 🤖 Assistant: {assistant_item['content']}")
 
-            if assistant_item.get("tokens") is not None:
+            if assistant_item and assistant_item.get("tokens") is not None:
                 st.caption(
                     f"Tokens: {assistant_item['tokens']} | "
                     f"Cost: ₹{assistant_item['cost']:.6f}"
